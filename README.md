@@ -400,4 +400,4 @@ pnpm db:migrate
 
 ## License
 
-Private
+MIT — see [LICENSE](LICENSE).
