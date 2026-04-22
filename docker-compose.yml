@@ -1,0 +1,34 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    ports:
+      - "4210:4210"
+    environment:
+      DATABASE_URL: "file:/data/opcify.db"
+      API_PORT: "4210"
+      API_HOST: "0.0.0.0"
+      ADAPTER_MODE: "prisma"
+    volumes:
+      - opcify-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4210/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    ports:
+      - "3210:3210"
+    environment:
+      NEXT_PUBLIC_API_URL: "http://localhost:4210"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  opcify-data:

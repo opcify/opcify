@@ -1,0 +1,57 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build / output
+dist/
+build/
+out/
+.next/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Database
+*.db
+*.db-journal
+
+# Cache & turbo
+.turbo
+.cache/
+.parcel-cache/
+.eslintcache
+*.tsbuildinfo
+
+# Testing / coverage
+coverage/
+.nyc_output/
+tests/.alpha_vantage_test_state.json
+
+# Python
+__pycache__/
+*.pyc
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# IDE / OS
+.DS_Store
+.idea/
+*.swp
+*.swo
+*~
+
+# Deploy / hosting
+.vercel
+
+.gstack/
+
+# K8s — real secrets and environment-specific ingress (keep .example files)
+k8s/manifests/31-opcify-secrets.yaml
+k8s/manifests/90-ingress.yaml

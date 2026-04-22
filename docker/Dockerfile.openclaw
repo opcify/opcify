@@ -1,0 +1,160 @@
+# ── Stage 1: Build himalaya with OAuth2 support ──────────────────
+FROM rust:1-bookworm AS himalaya-builder
+RUN cargo install himalaya --features oauth2,keyring
+
+# ── Stage 2: Main image ─────────────────────────────────────────
+FROM ghcr.io/openclaw/openclaw:latest
+
+USER root
+
+# ── System dependencies ───────────────────────────────────────────
+# sqlite3 is required by QMD (the OpenClaw memory backend) as its
+# on-disk store — QMD persists sessions and QMD-indexed docs to a
+# SQLite database under ~/.openclaw/memory.
+RUN apt-get update \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    curl \
+    socat \
+    libdbus-1-3 \
+    libsecret-1-0 \
+    sqlite3 \
+    jq \
+ && rm -rf /var/lib/apt/lists/*
+
+# ── Install uv + uvx ─────────────────────────────────────────────
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
+ && cp /root/.local/bin/uv /usr/local/bin/uv \
+ && cp /root/.local/bin/uvx /usr/local/bin/uvx
+
+# ── Install-time environment ──────────────────────────────────────
+# Set HOME to /home/node BEFORE running any $HOME-based installers so their
+# venvs and config files land under the runtime user's home. The browser-use
+# install.sh is driven entirely off of $HOME. PLAYWRIGHT_BROWSERS_PATH is set
+# up-front so `uvx playwright install chromium --with-deps` (called from
+# install.sh) writes Chromium to the canonical per-venv path used at runtime.
+ENV HOME=/home/node
+ENV PLAYWRIGHT_BROWSERS_PATH=/home/node/.browser-use-env/pw-browsers
+
+# ── OpenClaw Python venv ────────────────────────────────────
+RUN uv venv /home/node/.openclaw-env \
+ && chown -R node:node /home/node/.openclaw-env
+
+# ── npm global directory ───────────────────────────────────────
+RUN mkdir -p /home/node/.npm-global \
+ && chown -R node:node /home/node/.npm-global \
+ && npm config set prefix /home/node/.npm-global
+
+# ── QMD (OpenClaw memory backend) ──────────────────────────────
+# DEFERRED to container startup. QMD pulls down a large local embedding
+# model (~300M GGUF) and only a subset of workspaces actually enable
+# memory.backend: "qmd" — the wizard's default is now Markdown File
+# (builtin) which doesn't need QMD at all. Installing it unconditionally
+# at image-build time wastes both image size and build time for every
+# workspace that will never run QMD.
+#
+# Instead, the entrypoint-wrapper.sh below checks OPCIFY_INSTALL_QMD=1
+# on first container boot and runs `npm install -g @tobilu/qmd` into
+# /home/node/.npm-global/bin/qmd if set. The Opcify backend passes the
+# env var only when the user selected the QMD memory engine in the
+# workspace creation wizard — see apps/api/src/workspace/WorkspaceConfig.ts
+# buildOpenclawJson and WorkspaceService docker-run env construction.
+
+# ── Browser Use CLI + Chromium ────────────────────────────────────
+# Runs the upstream installer, which (with HOME=/home/node set above):
+#   1. Creates /home/node/.browser-use-env (uv venv + browser-use package)
+#   2. Runs `uvx playwright install chromium --with-deps` which writes
+#      Chromium to $PLAYWRIGHT_BROWSERS_PATH and apt-gets the shared libs
+#   3. Installs profile-use to /home/node/.browser-use/bin
+# After the installer finishes, we replace /usr/local/bin/browser-use with a
+# wrapper that execs the real venv binary (the upstream suggests `uvx`, which
+# would throw away the venv and hit PyPI on every invocation). The later
+# `chown -R node:node /home/node` picks up ownership of everything written
+# during the install.
+RUN curl -fsSL https://browser-use.com/cli/install.sh | bash \
+ && printf '#!/bin/sh\nexec /home/node/.browser-use-env/bin/browser-use "$@"\n' \
+      > /usr/local/bin/browser-use \
+ && chmod 755 /usr/local/bin/browser-use \
+ && for rc in /home/node/.bashrc /home/node/.profile /home/node/.zshrc; do \
+      [ -f "$rc" ] && sed -i '/^# Browser-Use$/d; /\.browser-use-env\/bin/d' "$rc"; \
+    done; true
+
+
+# ── Himalaya email CLI (built with oauth2 + keyring features) ─────
+COPY --from=himalaya-builder /usr/local/cargo/bin/himalaya /usr/local/bin/himalaya
+
+# ── Permissions for node user ──────────────────────────────────────
+RUN chown -R node:node /home/node \
+ && mkdir -p /home/node/.npm \
+ && chown -R node:node /home/node/.npm
+
+# pip/pip3 shim — OpenClaw's exec sanitizer strips VIRTUAL_ENV from the env
+# it hands to agent shell commands (see apps/api notes on shell-env probe),
+# so `uv pip` would otherwise error with "No virtual environment found". We
+# re-inject VIRTUAL_ENV only for the uv pip subprocess so every `pip install`
+# lands in /home/node/.openclaw-env regardless of the caller's env.
+RUN printf '#!/bin/sh\nexec env VIRTUAL_ENV=/home/node/.openclaw-env uv pip "$@"\n' \
+      > /usr/local/bin/pip \
+ && chmod 755 /usr/local/bin/pip \
+ && printf '#!/bin/sh\nexec env VIRTUAL_ENV=/home/node/.openclaw-env uv pip "$@"\n' \
+      > /usr/local/bin/pip3 \
+ && chmod 755 /usr/local/bin/pip3
+
+# /etc/profile.d/opcify-path.sh — restores PATH for the OpenClaw agent exec
+# tool. OpenClaw probes /bin/sh -l to discover the env it hands to spawned
+# tool calls, and /etc/profile hardcodes a short PATH for non-root users
+# (/usr/local/bin:/usr/bin:/bin:…) that clobbers the image's ENV PATH. Without
+# this file the agent sees /usr/bin/python3 instead of the openclaw-env venv
+# python. PATH is not blocked by the sanitizer policy, so restoring it here
+# is the authoritative way to get venv binaries in front of the agent.
+RUN printf 'export PATH="/home/node/.npm-global/bin:/home/node/.openclaw-env/bin:/home/node/.browser-use/bin:$PATH"\n' \
+      > /etc/profile.d/opcify-path.sh \
+ && chmod 644 /etc/profile.d/opcify-path.sh
+
+# ── Environment ───────────────────────────────────────────────────
+# HOME and PLAYWRIGHT_BROWSERS_PATH are set earlier (above the OpenClaw
+# venv step) so the browser-use installer uses them; they persist to runtime.
+#
+# PATH deliberately does NOT include /home/node/.browser-use-env/bin — that
+# would put browser-use's Python ahead of the OpenClaw venv's, so any skill
+# that does `#!/usr/bin/env python` or runs bare `python`/`pip` would silently
+# execute inside browser-use's locked-down dependency set and fail to import
+# its own packages. browser-use itself is still reachable via the wrapper at
+# /usr/local/bin/browser-use (which execs the real venv binary by absolute
+# path), and the `playwright` CLI, when needed, is available on-demand as
+# `uvx playwright`. profile-use lives in /home/node/.browser-use/bin, which
+# is a separate directory from the browser-use venv and stays on PATH.
+ENV PATH="/home/node/.npm-global/bin:/home/node/.openclaw-env/bin:/home/node/.browser-use/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+ENV VIRTUAL_ENV="/home/node/.openclaw-env"
+ENV NPM_CONFIG_PREFIX="/home/node/.npm-global"
+ENV NODE_ENV=production
+ENV OPENCLAW_NO_RESPAWN=1
+ENV HIMALAYA_CONFIG="/home/node/.openclaw/data/.gmail/config.toml"
+
+# ── TCP proxy entrypoint (18789 -> 18790 for Docker host access) ──
+# The gateway binds to loopback:18790 to bypass pairing. socat on
+# 0.0.0.0:18789 makes it accessible via Docker port mapping.
+#
+# Before starting socat + the gateway, the wrapper also performs the
+# lazy QMD install described in the "QMD" section above. It's a no-op
+# unless OPCIFY_INSTALL_QMD=1 is set in the container env AND the qmd
+# binary isn't already on PATH (so container restarts after the first
+# install don't re-run `npm install`). Install output is tee'd into the
+# gateway logs so provisioning failures are visible via `docker logs`.
+USER root
+RUN cat > /usr/local/bin/entrypoint-wrapper.sh <<'EOF' && chmod +x /usr/local/bin/entrypoint-wrapper.sh
+#!/bin/sh
+set -e
+
+if [ "${OPCIFY_INSTALL_QMD:-0}" = "1" ] && ! command -v qmd >/dev/null 2>&1; then
+  echo "[opcify] installing @tobilu/qmd (one-time, user selected QMD memory engine)..."
+  npm install -g @tobilu/qmd || {
+    echo "[opcify] QMD install failed — gateway will start without it." >&2
+  }
+fi
+
+socat TCP-LISTEN:18789,fork,reuseaddr TCP:127.0.0.1:18790 &
+exec "$@"
+EOF
+USER node
+ENTRYPOINT ["/usr/local/bin/entrypoint-wrapper.sh"]
+CMD ["docker-entrypoint.sh", "node", "openclaw.mjs", "gateway", "--allow-unconfigured"]

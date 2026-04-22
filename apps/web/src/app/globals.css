@@ -1,0 +1,425 @@
+@import "tailwindcss";
+
+/*
+ * Theme color system
+ *
+ * Strategy: The app was built dark-first using zinc-* Tailwind classes.
+ * Rather than editing 80+ files, we remap the zinc palette in light mode
+ * so that dark-themed zinc classes produce correct light-mode colors.
+ *
+ * In dark mode:  bg-zinc-950 = very dark,  text-zinc-100 = very light  (native)
+ * In light mode: bg-zinc-950 = very light,  text-zinc-100 = very dark  (swapped)
+ */
+
+@theme {
+  /* Semantic tokens (for newly-written theme-aware components) */
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-overlay: var(--surface-overlay);
+  --color-surface-inset: var(--surface-inset);
+  --color-border-theme: var(--border);
+  --color-border-muted: var(--border-muted);
+  --color-primary: var(--text-primary);
+  --color-secondary: var(--text-secondary);
+  --color-tertiary: var(--text-tertiary);
+  --color-muted: var(--text-muted);
+}
+
+/* ── Dark theme (default) ── */
+:root {
+  --surface: #09090b;
+  --surface-raised: #18181b;
+  --surface-overlay: #27272a;
+  --surface-inset: #3f3f46;
+  --border: #3f3f46;
+  --border-muted: #27272a;
+  --text-primary: #f4f4f5;
+  --text-secondary: #d4d4d8;
+  --text-tertiary: #a1a1aa;
+  --text-muted: #71717a;
+  color-scheme: dark;
+}
+
+/* ── Light theme ── */
+.light {
+  --surface: #ffffff;
+  --surface-raised: #f5f5f6;
+  --surface-overlay: #e8e8ec;
+  --surface-inset: #d1d1d6;
+  --border: #c0c0c8;
+  --border-muted: #d4d4da;
+  --text-primary: #111113;
+  --text-secondary: #313136;
+  --text-tertiary: #46464d;
+  --text-muted: #5f5f68;
+  color-scheme: light;
+
+  /* ── Remap zinc palette (swap dark ↔ light) ── */
+  --color-zinc-950: #ffffff;
+  --color-zinc-900: #fafafa;
+  --color-zinc-800: #f0f0f2;
+  --color-zinc-700: #e0e0e5;
+  --color-zinc-600: #c0c0c8;
+  --color-zinc-500: #5f5f68;
+  --color-zinc-400: #46464d;
+  --color-zinc-300: #313136;
+  --color-zinc-200: #222225;
+  --color-zinc-100: #111113;
+  --color-zinc-50: #09090b;
+
+  /* ── Remap accent colors for light mode contrast ── */
+
+  /* Status backgrounds: dark → light tint */
+  --color-emerald-950: #ecfdf5;
+  --color-red-950: #fef2f2;
+  --color-amber-950: #fffbeb;
+  --color-blue-950: #eff6ff;
+  --color-violet-950: #f5f3ff;
+  --color-orange-950: #fff7ed;
+  --color-purple-950: #faf5ff;
+
+  /* Status/accent text: light → dark for contrast on white */
+  --color-emerald-400: #059669;
+  --color-red-400: #dc2626;
+  --color-amber-400: #b45309;
+  --color-blue-400: #2563eb;
+  --color-violet-400: #7c3aed;
+  --color-orange-400: #c2410c;
+  --color-purple-400: #7c3aed;
+
+  /* Accent borders & elements: dark shades → visible mid-tones */
+  --color-emerald-800: #059669;
+  --color-red-800: #dc2626;
+  --color-amber-800: #b45309;
+  --color-blue-800: #2563eb;
+  --color-violet-800: #7c3aed;
+  --color-purple-800: #7c3aed;
+
+  /* Primary button colors - slightly darker for better contrast */
+  --color-emerald-600: #047857;
+  --color-emerald-700: #065f46;
+  --color-emerald-500: #059669;
+
+  /* Progress bar & dot colors - ensure visibility */
+  --color-emerald-100: #d1fae5;
+}
+
+/*
+ * Light mode fixups for text-white
+ *
+ * In dark mode, text-white is used for:
+ *  1. Active tab/button text on bg-zinc-800 → needs dark text in light mode
+ *  2. Button text on colored bg (emerald, violet, etc.) → must stay white
+ *
+ * Solution: Flip text-white to dark globally in light mode,
+ * then restore it on colored backgrounds via !important.
+ */
+.light .text-white {
+  color: #111113;
+}
+
+/* Restore white text on colored accent backgrounds */
+.light .bg-emerald-600.text-white,
+.light .bg-emerald-700.text-white,
+.light .bg-emerald-500.text-white,
+.light .bg-violet-600.text-white,
+.light .bg-violet-500.text-white,
+.light .bg-red-600.text-white,
+.light .bg-red-500.text-white,
+.light .bg-blue-600.text-white,
+.light .bg-blue-500.text-white {
+  color: #ffffff !important;
+}
+
+/* Also restore white on hover states with colored backgrounds */
+.light .hover\:bg-emerald-500:hover.text-white,
+.light .hover\:bg-emerald-600:hover.text-white,
+.light .hover\:bg-emerald-700:hover.text-white {
+  color: #ffffff !important;
+}
+
+/* Handle hover:text-white and group-hover:text-white variants */
+.light .hover\:text-white:hover {
+  color: #111113;
+}
+.light .group:hover .group-hover\:text-white {
+  color: #111113;
+}
+
+/* Shadows & polish in light mode */
+.light {
+  --tw-ring-offset-color: #fff;
+}
+
+/* Subtle card/component shadows for depth in light mode */
+.light .border-zinc-800,
+.light .border-zinc-700 {
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.06);
+}
+
+/* Stronger focus ring for inputs in light mode */
+.light input:focus,
+.light textarea:focus,
+.light select:focus {
+  border-color: #059669 !important;
+  box-shadow: 0 0 0 2px rgba(5, 150, 105, 0.15);
+}
+
+/* Ensure placeholder text is visible but distinct */
+.light .placeholder-zinc-600::placeholder {
+  color: #8b8b95;
+}
+.light .placeholder-zinc-700::placeholder {
+  color: #9a9aa3;
+}
+
+/*
+ * Text-color overrides for zinc values used as label/separator text.
+ * The zinc palette remap makes these too light for text on white,
+ * even though they're appropriate for borders. We darken them when
+ * used as text color only.
+ */
+.light .text-zinc-600 {
+  color: #7a7a84;
+}
+.light .text-zinc-700 {
+  color: #9a9aa3;
+}
+
+/* Fix opacity-based status badge backgrounds for better visibility */
+.light .bg-emerald-500\/10 { background-color: rgba(5, 150, 105, 0.1); }
+.light .bg-red-500\/10 { background-color: rgba(220, 38, 38, 0.1); }
+.light .bg-amber-500\/10 { background-color: rgba(180, 83, 9, 0.1); }
+.light .bg-blue-500\/10 { background-color: rgba(37, 99, 235, 0.1); }
+.light .bg-violet-500\/10 { background-color: rgba(124, 58, 237, 0.1); }
+.light .bg-orange-500\/10 { background-color: rgba(194, 65, 12, 0.1); }
+.light .bg-zinc-500\/10 { background-color: rgba(95, 95, 104, 0.12); }
+.light .bg-zinc-400\/10 { background-color: rgba(70, 70, 77, 0.1); }
+
+/* Opacity-based backgrounds with /15 */
+.light .bg-emerald-500\/15 { background-color: rgba(5, 150, 105, 0.15); }
+.light .bg-blue-500\/15 { background-color: rgba(37, 99, 235, 0.15); }
+.light .bg-red-500\/15 { background-color: rgba(220, 38, 38, 0.15); }
+
+/* Violet accent backgrounds used in special options */
+.light .border-violet-500\/20 { border-color: rgba(124, 58, 237, 0.25); }
+.light .bg-violet-500\/5 { background-color: rgba(124, 58, 237, 0.06); }
+.light .hover\:border-violet-500\/40:hover { border-color: rgba(124, 58, 237, 0.4); }
+.light .hover\:bg-violet-500\/10:hover { background-color: rgba(124, 58, 237, 0.1); }
+
+/* Accent-tinted section borders and backgrounds (task detail) */
+.light .border-blue-500\/15 { border-color: rgba(37, 99, 235, 0.18); }
+.light .bg-blue-500\/5 { background-color: rgba(37, 99, 235, 0.05); }
+.light .border-violet-500\/15 { border-color: rgba(124, 58, 237, 0.18); }
+.light .border-orange-500\/15 { border-color: rgba(194, 65, 12, 0.18); }
+.light .bg-orange-500\/5 { background-color: rgba(194, 65, 12, 0.05); }
+.light .border-red-500\/20 { border-color: rgba(220, 38, 38, 0.22); }
+.light .bg-red-500\/5 { background-color: rgba(220, 38, 38, 0.05); }
+.light .border-blue-500\/20 { border-color: rgba(37, 99, 235, 0.22); }
+.light .border-blue-500\/30 { border-color: rgba(37, 99, 235, 0.3); }
+.light .bg-blue-500\/10 { background-color: rgba(37, 99, 235, 0.1); }
+.light .border-amber-500\/30 { border-color: rgba(180, 83, 9, 0.3); }
+.light .bg-amber-500\/10 { background-color: rgba(180, 83, 9, 0.1); }
+.light .bg-amber-500\/20 { background-color: rgba(180, 83, 9, 0.2); }
+
+/* Hover states for accent-tinted elements */
+.light .hover\:border-blue-500\/50:hover { border-color: rgba(37, 99, 235, 0.5); }
+.light .hover\:bg-blue-500\/10:hover { background-color: rgba(37, 99, 235, 0.1); }
+.light .hover\:bg-blue-500\/20:hover { background-color: rgba(37, 99, 235, 0.2); }
+.light .hover\:border-amber-500\/50:hover { border-color: rgba(180, 83, 9, 0.5); }
+.light .hover\:bg-amber-500\/20:hover { background-color: rgba(180, 83, 9, 0.2); }
+.light .hover\:bg-emerald-500\/10:hover { background-color: rgba(5, 150, 105, 0.1); }
+.light .hover\:bg-red-500\/10:hover { background-color: rgba(220, 38, 38, 0.1); }
+
+/* Red/orange button colors for light mode */
+.light .bg-orange-600 { background-color: #c2410c; }
+.light .hover\:bg-orange-500:hover { background-color: #ea580c; }
+.light .bg-blue-600 { background-color: #2563eb; }
+.light .hover\:bg-blue-500:hover { background-color: #3b82f6; }
+.light .bg-red-600 { background-color: #dc2626; }
+.light .hover\:bg-red-500:hover { background-color: #ef4444; }
+
+/* Restore white text on additional colored button backgrounds */
+.light .bg-orange-600.text-white,
+.light .bg-blue-600.text-white,
+.light .bg-red-600.text-white {
+  color: #ffffff !important;
+}
+
+/* Light mode border for red accents (delete buttons) */
+.light .border-red-900\/50 { border-color: rgba(220, 38, 38, 0.2); }
+.light .hover\:border-red-800:hover { border-color: rgba(220, 38, 38, 0.4); }
+.light .hover\:bg-red-900\/20:hover { background-color: rgba(220, 38, 38, 0.08); }
+
+/* ── Markdown preview-only mode (hide editor pane, show only preview) ── */
+.result-preview-container .w-md-editor-content {
+  display: flex !important;
+}
+.result-preview-container .w-md-editor-input {
+  display: none !important;
+}
+.result-preview-container .w-md-editor-preview {
+  flex: 1 !important;
+  width: 100% !important;
+  padding: 12px !important;
+}
+.result-preview-container .w-md-editor {
+  box-shadow: none !important;
+}
+
+/* ── Fullscreen result: single scrollbar on the outer wrapper only ── */
+.result-fullscreen-container .w-md-editor,
+.result-fullscreen-container .w-md-editor-content,
+.result-fullscreen-container .w-md-editor-preview,
+.result-fullscreen-container .wmde-markdown {
+  overflow: visible !important;
+  height: auto !important;
+  max-height: none !important;
+}
+.result-fullscreen-container .w-md-editor {
+  box-shadow: none !important;
+}
+.result-fullscreen-container .w-md-editor-content {
+  display: flex !important;
+}
+.result-fullscreen-container .w-md-editor-input {
+  display: none !important;
+}
+.result-fullscreen-container .w-md-editor-preview {
+  flex: 1 !important;
+  width: 100% !important;
+  padding: 0 !important;
+}
+
+/* ── Hide scrollbar but keep scrolling ── */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* ── Animations ── */
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* ── Mobile responsiveness ── */
+
+/* Ensure modal overlays add padding on small screens */
+@media (max-width: 639px) {
+  .fixed.inset-0.flex.items-center.justify-center {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}
+
+/* ── Force dark mode scope (landing page) ── */
+.force-dark {
+  --surface: #09090b;
+  --surface-raised: #18181b;
+  --surface-overlay: #27272a;
+  --surface-inset: #3f3f46;
+  --border: #3f3f46;
+  --border-muted: #27272a;
+  --text-primary: #f4f4f5;
+  --text-secondary: #d4d4d8;
+  --text-tertiary: #a1a1aa;
+  --text-muted: #71717a;
+  color-scheme: dark;
+
+  --color-zinc-50: #fafafa;
+  --color-zinc-100: #f4f4f5;
+  --color-zinc-200: #e4e4e7;
+  --color-zinc-300: #d4d4d8;
+  --color-zinc-400: #a1a1aa;
+  --color-zinc-500: #71717a;
+  --color-zinc-600: #52525b;
+  --color-zinc-700: #3f3f46;
+  --color-zinc-800: #27272a;
+  --color-zinc-900: #18181b;
+  --color-zinc-950: #09090b;
+
+  --color-emerald-100: #d1fae5;
+  --color-emerald-400: #34d399;
+  --color-emerald-500: #10b981;
+  --color-emerald-600: #059669;
+  --color-emerald-700: #047857;
+  --color-emerald-800: #065f46;
+  --color-emerald-950: #022c22;
+
+  --color-red-400: #f87171;
+  --color-red-800: #991b1b;
+  --color-red-950: #450a0a;
+
+  --color-amber-400: #fbbf24;
+  --color-amber-800: #92400e;
+  --color-amber-950: #451a03;
+
+  --color-blue-400: #60a5fa;
+  --color-blue-800: #1e40af;
+  --color-blue-950: #172554;
+
+  --color-violet-400: #a78bfa;
+  --color-violet-800: #5b21b6;
+  --color-violet-950: #2e1065;
+
+  --color-orange-400: #fb923c;
+  --color-orange-950: #431407;
+
+  --color-purple-400: #c084fc;
+  --color-purple-800: #6b21a8;
+  --color-purple-950: #3b0764;
+}
+
+/* Undo light-mode text/border overrides inside force-dark */
+.light .force-dark .text-white {
+  color: #ffffff;
+}
+.light .force-dark .hover\:text-white:hover {
+  color: #ffffff;
+}
+.light .force-dark .group:hover .group-hover\:text-white {
+  color: #ffffff;
+}
+.light .force-dark .text-zinc-600 {
+  color: var(--color-zinc-600);
+}
+.light .force-dark .text-zinc-700 {
+  color: var(--color-zinc-700);
+}
+.light .force-dark .border-zinc-800,
+.light .force-dark .border-zinc-700 {
+  box-shadow: none;
+}
+
+/* ── Landing page utilities ── */
+
+.text-gradient-emerald {
+  background: linear-gradient(135deg, #10b981 0%, #059669 50%, #34d399 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.text-gradient-white {
+  background: linear-gradient(180deg, #ffffff 0%, #a1a1aa 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.bg-grid-pattern {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 64px 64px;
+}
+
+.bg-dot-pattern {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  background-size: 24px 24px;
+}

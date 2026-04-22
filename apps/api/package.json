@@ -1,0 +1,33 @@
+{
+  "name": "@opcify/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsup src/index.ts --format esm --dts",
+    "start": "node dist/index.js",
+    "lint": "eslint src/",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.0.0",
+    "@kubernetes/client-node": "^1.0.0",
+    "@opcify/core": "workspace:*",
+    "@prisma/client": "^6.0.0",
+    "bullmq": "^5.71.1",
+    "dockerode": "^4.0.10",
+    "fastify": "^5.0.0",
+    "ioredis": "^5.10.1",
+    "openai": "^6.31.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/dockerode": "^4.0.1",
+    "tsup": "^8.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^4.1.0"
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "name": "opcify",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Lightweight dashboard and helper for OpenClaw",
+  "scripts": {
+    "predev": "pnpm --filter @opcify/core build",
+    "dev": "docker compose -f docker/docker-compose.yml up -d redis && prisma migrate deploy --schema prisma/schema.prisma && pnpm --filter @opcify/web dev & pnpm --filter @opcify/api dev",
+    "postinstall": "prisma generate --schema prisma/schema.prisma && (prisma migrate deploy --schema prisma/schema.prisma || true) && pnpm --filter @opcify/core build",
+    "predev:web": "pnpm --filter @opcify/core build",
+    "dev:web": "pnpm --filter @opcify/web dev",
+    "predev:api": "pnpm --filter @opcify/core build",
+    "dev:api": "docker compose -f docker/docker-compose.yml up -d redis && pnpm --filter @opcify/api dev",
+    "build": "pnpm -r build",
+    "build:web": "pnpm --filter @opcify/web build",
+    "build:api": "pnpm --filter @opcify/api build",
+    "lint": "pnpm -r lint",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "db:generate": "prisma generate --schema prisma/schema.prisma",
+    "db:migrate": "prisma migrate dev --schema prisma/schema.prisma --name",
+    "db:push": "prisma db push --schema prisma/schema.prisma",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:studio": "prisma studio --schema prisma/schema.prisma",
+    "db:backup": "cp prisma/opcify.db prisma/opcify.db.bak-$(date +%Y%m%d%H%M%S) && echo 'Backup created'",
+    "db:check": "prisma migrate status --schema prisma/schema.prisma",
+    "db:squash": "bash scripts/db-squash.sh",
+    "predev:fs": "pnpm --filter @opcify/core build",
+    "dev:fs": "ADAPTER_MODE=filesystem pnpm --filter @opcify/api dev",
+    "clean": "rm -rf node_modules apps/*/node_modules packages/*/node_modules apps/*/.next apps/api/dist packages/core/dist",
+    "test": "pnpm --filter @opcify/api test",
+    "test:watch": "pnpm --filter @opcify/api test:watch"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "@prisma/client": "^6.0.0",
+    "@types/node": "^22.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "eslint": "^9.0.0",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "globals": "^17.4.0",
+    "prettier": "^3.0.0",
+    "prisma": "^6.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.7.0"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.15.0"
+}

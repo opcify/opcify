@@ -1,0 +1,359 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  googleId     String?  @unique
+  email        String   @unique
+  name         String
+  passwordHash String?
+  avatarUrl    String?
+  timezone     String   @default("UTC")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  workspaces Workspace[]
+}
+
+model Workspace {
+  id                String    @id @default(cuid())
+  name              String
+  slug              String    @unique
+  description       String    @default("")
+  type              String    @default("blank") // blank | starter | content_studio | marketing | real_estate
+  status            String    @default("draft") // draft | provisioning | ready | failed | archived
+  settingsJson      String?
+  bundleVersion     String?
+  isDefault         Boolean   @default(false)
+  userId            String?
+  lastProvisionedAt DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  owner          User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  agents         Agent[]
+  tasks          Task[]
+  taskGroups     TaskGroup[]
+  taskTemplates  TaskTemplate[]
+  inboxItems     InboxItem[]
+  clients        Client[]
+  ledgerEntries  LedgerEntry[]
+  recurringRules RecurringRule[]
+  notes          Note[]
+}
+
+model WorkspaceTemplate {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  name        String
+  description String   @default("")
+  category    String   @default("general") // general | content | marketing | real_estate
+  icon        String   @default("layout-dashboard")
+  isBuiltIn   Boolean  @default(true)
+  configJson  String   @default("{}") // bundled agent/skill/template pack references
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model TaskTemplate {
+  id                 String   @id @default(cuid())
+  key                String   @unique
+  name               String
+  category           String   @default("operations")
+  description        String   @default("")
+  suggestedAgentRoles String  @default("[]") // JSON array of role strings
+  defaultTitle       String   @default("")
+  defaultDescription String   @default("")
+  defaultTags        String   @default("[]") // JSON array of tag strings
+  defaultAgentId     String?
+  defaultPriority    String   @default("medium")
+  sourceTaskId       String?
+  workspaceId        String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model Agent {
+  id          String    @id @default(cuid())
+  name        String
+  role        String
+  description String    @default("")
+  model       String    @default("gpt-5.4") // gpt-5.4 | gpt-5.4-mini | claude-sonnet | claude-haiku
+  soul        String?   // SOUL.md — personality & principles
+  agentConfig String?   // AGENTS.md — operational logic & rules
+  identity    String?   // IDENTITY.md — display identity (name, role, tone)
+  user        String?   // USER.md — user context
+  tools       String?   // TOOLS.md — tool-specific configuration
+  heartbeat   String?   // HEARTBEAT.md — periodic check-in instructions
+  bootstrap   String?   // BOOTSTRAP.md — startup instructions
+  isSystem    Boolean   @default(false) // true for default system agents
+  status        String    @default("idle") // idle | running | blocked | error | disabled
+  maxConcurrent Int       @default(1) // max tasks running simultaneously per agent
+  deletedAt     DateTime? // soft-delete timestamp; null = active
+  workspaceId   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  skills    AgentSkill[]
+  tasks     Task[]
+}
+
+model Skill {
+  id          String @id @default(cuid())
+  key         String @unique
+  name        String
+  description String @default("")
+  category    String @default("general")
+
+  agents AgentSkill[]
+}
+
+model AgentSkill {
+  id          String   @id @default(cuid())
+  agentId     String
+  skillId     String
+  installedAt DateTime @default(now())
+
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  skill Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([agentId, skillId])
+}
+
+model TaskGroup {
+  id           String   @id @default(cuid())
+  title        String
+  description  String   @default("")
+  type         String   @default("decomposition") // decomposition | manual (future-safe)
+  sourceTaskId String?  // link to originating decomposition task
+  workspaceId  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  tasks     Task[]
+}
+
+model Task {
+  id            String    @id @default(cuid())
+  title         String
+  description   String    @default("")
+  taskType      String    @default("normal") // normal | decomposition
+  agentId       String
+  status        String    @default("queued") // queued | running | waiting | done | failed
+  priority      String    @default("medium") // high | medium | low
+  progress      Int       @default(0) // 0-100
+  reviewStatus  String?   // null | pending | accepted | rejected | followed_up
+  reviewedAt    DateTime?
+  reviewNotes   String?
+  resultSummary String?
+  resultContent String?
+  sourceTaskId  String?
+  plannedDate   DateTime? // date a task is planned/scheduled for
+  isFocus       Boolean   @default(false)
+  taskGroupId      String?
+  waitingReason    String?   // waiting_for_review | waiting_for_input | waiting_for_dependency | waiting_for_retry | waiting_for_external
+  blockingQuestion String?   // freeform question/reason posted when the agent sets status=waiting; rendered on the kanban for the CEO to respond to
+  blockedByTaskId  String?   // single blocker reference (no relation for simplicity)
+  workspaceId      String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  // Set on first queued→running transition. Cleared on retryTask. Write-once-per-run:
+  // the three writers (dispatch.ts, prisma-adapter.startTask, syncExecutionSteps) must
+  // guard with "only set when null". Any new writer must follow the same rule or retry
+  // timing will be wrong.
+  startedAt        DateTime?
+  finishedAt       DateTime?
+  archivedAt       DateTime?
+
+  maxRetries          Int       @default(3) // max dispatch retry attempts
+
+  executionMode       String    @default("single") // single | manual_workflow | orchestrated
+  orchestratorAgentId String?
+  clientId            String?
+  recurringRuleId     String?
+
+  workspace      Workspace?      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  agent          Agent           @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  sourceTask     Task?           @relation("TaskFollowUp", fields: [sourceTaskId], references: [id])
+  followUpTasks  Task[]          @relation("TaskFollowUp")
+  taskGroup      TaskGroup?      @relation(fields: [taskGroupId], references: [id])
+  client         Client?         @relation(fields: [clientId], references: [id])
+  recurringRule  RecurringRule?  @relation(fields: [recurringRuleId], references: [id])
+  logs           TaskLog[]
+  executionSteps TaskExecutionStep[]
+  ledgerEntries  LedgerEntry[]
+}
+
+model TaskLog {
+  id        String   @id @default(cuid())
+  taskId    String
+  level     String   @default("info") // info | error
+  message   String
+  createdAt DateTime @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+}
+
+model TaskExecutionStep {
+  id            String    @id @default(cuid())
+  taskId        String
+  stepOrder     Int
+  agentId       String?
+  agentName     String?
+  roleLabel     String?
+  title         String?
+  instruction   String?
+  status        String    @default("pending") // pending | running | completed | failed
+  outputSummary String?
+  outputContent String?
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, stepOrder])
+}
+
+model Client {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  company     String?
+  email       String?
+  phone       String?
+  website     String?
+  address     String?
+  notes       String?
+  status      String   @default("active") // active | inactive | archived
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace      Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  tasks          Task[]
+  ledgerEntries  LedgerEntry[]
+  recurringRules RecurringRule[]
+  linkedNotes    Note[]
+}
+
+model LedgerEntry {
+  id               String   @id @default(cuid())
+  workspaceId      String
+  type             String   // income | expense | quote
+  amount           Float
+  currency         String   @default("USD")
+  clientId         String?
+  taskId           String?
+  category         String?
+  description      String
+  attachmentType   String?  // invoice | receipt
+  attachmentUrl    String?
+  notes            String?
+  // JSON payload for type-specific state. For type=quote, stores:
+  //   { status, lineItems, shareToken, validUntil, terms,
+  //     acceptedAt, declinedAt, declineReason, convertedInvoiceId }
+  // Null for income/expense rows.
+  metadata         String?
+  entryDate        DateTime @default(now())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  client    Client?   @relation(fields: [clientId], references: [id])
+  task      Task?     @relation(fields: [taskId], references: [id])
+}
+
+model RecurringRule {
+  id          String    @id @default(cuid())
+  workspaceId String
+  title       String
+  frequency   String    // weekly | monthly
+  interval    Int       @default(1)
+  dayOfWeek   Int?      // 0–6 (Sunday–Saturday) for weekly
+  dayOfMonth  Int?      // 1–31 for monthly
+  hour        Int?      // 0–23 (hour of day to run)
+  minute      Int?      // 0–59 (minute of hour to run)
+  startDate   DateTime? // optional specific start date/time
+  nextRunAt   DateTime
+  lastRunAt   DateTime?
+  isActive    Boolean   @default(true)
+  templateId  String?   // optional task template reference
+  clientId    String?   // optional client context
+  agentId     String?   // optional default agent
+  presetData  String?   // JSON: { description, priority, etc. }
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  client    Client?   @relation(fields: [clientId], references: [id])
+  tasks     Task[]
+}
+
+model InboxItem {
+  id        String   @id @default(cuid())
+  content   String
+  status    String   @default("inbox") // inbox | clarified | processed | snoozed | draft
+  kind      String?  // idea | request | follow_up | reminder | email
+  source    String   @default("manual") // manual | agent | system | client | email | compose
+
+  snoozedUntil     DateTime?
+  convertedTaskId  String?
+  convertedGroupId String?
+  workspaceId      String?
+
+  // Email metadata
+  emailMessageId   String?   // IMAP Message-ID for dedup
+  emailFrom        String?   // sender address
+  emailTo          String?   // recipient(s), comma-separated
+  emailCc          String?   // cc recipients, comma-separated
+  emailBcc         String?   // bcc recipients, comma-separated
+  emailSubject     String?   // original subject line
+  emailDate        DateTime? // original send date
+  emailThreadId    String?   // conversation grouping
+  emailInReplyTo   String?   // parent Message-ID
+  emailLabels      String?   // JSON array of labels/folders
+  emailIsRead      Boolean   @default(false)
+  attachmentsJson  String?   // JSON array of { path, fileName, mediaType, size }
+
+  // AI triage context (set by agent when pushing to Opcify)
+  aiSummary         String?  // why this needs boss attention
+  aiUrgency         String?  // low | medium | high | critical
+  aiSuggestedAction String?  // approve_draft | reply | delegate | convert_task | snooze | forward
+  aiDraftReply      String?  // pre-drafted response
+
+  // Action tracking (set by boss via UI)
+  actionTaken    String?  // approved | delegated | replied | converted | snoozed | archived
+  actionAgentId  String?  // agent assigned to execute
+  linkedClientId String?  // link to Client record
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model Note {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  title           String
+  contentMarkdown String   @default("")
+  clientId        String?
+  isArchived      Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  client    Client?   @relation(fields: [clientId], references: [id])
+}

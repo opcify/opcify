@@ -1,0 +1,33 @@
+FROM node:22-slim AS base
+RUN corepack enable pnpm
+
+WORKDIR /app
+
+# Install dependencies only — skip the root `postinstall` at this stage
+# because it needs packages/core/ source + Prisma schema, which we haven't
+# copied yet. We run the equivalent steps explicitly after the source copy.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json ./
+COPY apps/api/package.json apps/api/
+COPY packages/core/package.json packages/core/
+# Placeholder — the real DATABASE_URL is injected from the K8s ConfigMap.
+ENV DATABASE_URL="file:/tmp/build.db"
+RUN pnpm install --frozen-lockfile --ignore-scripts
+
+# Now that the source is in place, run prisma generate + the core build
+# that the root `postinstall` would have done.
+COPY prisma/ prisma/
+COPY packages/core/ packages/core/
+COPY apps/api/ apps/api/
+# Runtime: findProjectRoot() in apps/api/src/lib/frontmatter.ts walks up from
+# process.cwd() looking for a `templates/` directory (managed skills,
+# workspace templates, agent starters).
+COPY templates/ templates/
+RUN npx --no-install prisma generate --schema prisma/schema.prisma \
+    && pnpm --filter @opcify/core build \
+    && pnpm --filter @opcify/api build
+
+EXPOSE 4210
+# On each pod boot, apply any pending Prisma migrations to the SQLite DB
+# that lives on the mounted PVC. `migrate deploy` is idempotent — it's a
+# no-op when all migrations are already applied.
+CMD ["sh", "-c", "npx --no-install prisma migrate deploy --schema prisma/schema.prisma && exec node apps/api/dist/index.js"]
